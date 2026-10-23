@@ -50,10 +50,11 @@ jobs:
             libxkbcommon-dev \
             libx11-dev \
             libasound2-dev \
-            pkg-config
+            pkg-config \
+            cmake
 
       - name: Build executable
-        run: cargo build --release --target ${{ matrix.target }} -p s4-play
+        run: cargo build --release --target ${{ matrix.target }} -p s4-play --features sdl3-from-source
 
       - name: Package Linux executable
         if: runner.os == 'Linux'

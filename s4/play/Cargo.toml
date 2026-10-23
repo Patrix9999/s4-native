@@ -14,13 +14,8 @@ s4-host = { path = "../host" }
 s4-lifted = { path = "../lifted/all" }
 s4-x86 = { path = "../x86" }
 libc = "0.2"
-
-[target.'cfg(not(windows))'.dependencies]
 sdl3-sys = "=0.7.2"
 
-[target.'cfg(windows)'.dependencies]
-sdl3-sys = { version = "=0.7.2", features = ["build-from-source"] }
-
 [features]
-# Build SDL3 from its bundled source instead of linking the system library (needs cmake).
-sdl3-from-source = ["sdl3-sys/build-from-source"]
+# Build SDL3 from its bundled source statically (needs cmake).
+sdl3-from-source = ["sdl3-sys/build-from-source-static"]

@@ -46,12 +46,28 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            libwayland-dev \
-            libxkbcommon-dev \
-            libx11-dev \
-            libasound2-dev \
             pkg-config \
-            cmake
+            cmake \
+            ninja-build \
+            libasound2-dev \
+            libpulse-dev \
+            libx11-dev \
+            libxext-dev \
+            libxrandr-dev \
+            libxcursor-dev \
+            libxfixes-dev \
+            libxi-dev \
+            libxss-dev \
+            libxkbcommon-dev \
+            libdrm-dev \
+            libgbm-dev \
+            libgl1-mesa-dev \
+            libgles2-mesa-dev \
+            libegl1-mesa-dev \
+            libdbus-1-dev \
+            libudev-dev \
+            libwayland-dev \
+            libdecor-0-dev
 
       - name: Build executable
         run: cargo build --release --target ${{ matrix.target }} -p s4-play --features sdl3-from-source
@@ -66,7 +82,7 @@ jobs:
           [[ -f "$BIN" ]] || BIN="target/${{ matrix.target }}/release/s4-play"
           cp "$BIN" dist/s4-play
           chmod +x dist/s4-play
-          tar -C dist -czf s4-play-linux-x86_64.tar.gz s4-play
+          tar -czf s4-play-linux-x86_64.tar.gz -C dist s4-play
 
       - name: Package Windows executable
         if: runner.os == 'Windows'

@@ -622,7 +622,14 @@ pub fn all() -> Vec<Shim> {
             }
             heap::vm_alloc(c, a[1])
         }),
-        shim!("VirtualFree", 3, |_, _| 1),
+        shim!("VirtualFree", 3, |c, a| {
+            if a[2] == 0x8000 || a[1] == 0 {
+                crate::heap::vm_free(c, a[0], 0);
+            } else {
+                crate::heap::vm_free(c, a[0], a[1]);
+            }
+            1
+        }),
         shim!("VirtualQuery", 3, |c, a| {
             c.mem.fill(a[1], 0, 28);
             c.mem.w32(a[1], a[0] & !0xfff);
@@ -1179,7 +1186,10 @@ pub fn all() -> Vec<Shim> {
             c.mem.write_bytes(p, &buf);
             p
         }),
-        shim!("UnmapViewOfFile", 1, |_, _| 1),
+        shim!("UnmapViewOfFile", 1, |c, a| {
+            crate::heap::vm_free(c, a[0], 0);
+            1
+        }),
         shim!("CreatePipe", 4, |_, _| 0),
         shim!("PeekNamedPipe", 6, |_, _| 0),
         shim!("CreateProcessA", 10, |_, _| 0),

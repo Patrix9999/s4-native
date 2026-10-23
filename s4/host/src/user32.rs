@@ -450,7 +450,7 @@ pub fn format_c(c: &Cpu, fmt: u32, args: &mut dyn FnMut() -> u32) -> String {
             }
             's' | 'S' => {
                 let p = args();
-                let mut s: String = if p == 0 { "(null)".into() } else { c.mem.cstr(p).iter().map(|&b| b as char).collect() };
+                let mut s: String = if p == 0 { "(null)".into() } else { crate::text::decode_ansi(&c.mem.cstr(p), crate::text::active_codepage()) };
                 if let Some(pr) = prec {
                     s.truncate(pr);
                 }

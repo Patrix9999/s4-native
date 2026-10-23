@@ -38,7 +38,7 @@ pub const WAIT_TIMEOUT: u32 = 258;
 pub const INVALID_HANDLE: u32 = 0xffff_ffff;
 
 pub fn cstr(c: &Cpu, p: u32) -> String {
-    c.mem.cstr(p).iter().map(|&b| b as char).collect()
+    crate::text::decode_ansi(&c.mem.cstr(p), crate::text::active_codepage())
 }
 
 pub fn wstr(c: &Cpu, p: u32) -> String {
@@ -819,7 +819,7 @@ pub fn all() -> Vec<Shim> {
             let r = if (v < 0) == (d < 0) { (v.abs() + d.abs() / 2) / d.abs() } else { -((v.abs() + d.abs() / 2) / d.abs()) };
             r as i32 as u32
         }),
-        shim!("GetACP", 0, |_, _| 1252),
+        shim!("GetACP", 0, |_, _| crate::text::active_codepage()),
         shim!("GetOEMCP", 0, |_, _| 437),
         shim!("IsValidCodePage", 1, |_, _| 1),
         shim!("IsValidLocale", 2, |_, _| 1),

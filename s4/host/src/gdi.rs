@@ -22,7 +22,7 @@ pub struct Bitmap {
 pub enum Object {
     Bitmap(Bitmap),
     Dc { bitmap: Option<u32> },
-    Font { height: i32, weight: i32, italic: bool, face: String },
+    Font { height: i32, weight: i32, italic: bool, charset: u8, face: String },
     Other,
 }
 

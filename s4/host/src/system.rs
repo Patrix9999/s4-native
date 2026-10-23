@@ -70,7 +70,8 @@ pub fn all() -> Vec<Shim> {
         sh!("gdi32.dll", "CreateCompatibleBitmap", 3, |_, _| crate::gdi::new_handle(crate::gdi::Object::Other)),
         sh!("gdi32.dll", "GetDIBits", 7, |_, _| 0),
         sh!("gdi32.dll", "GetTextExtentPoint32A", 4, |c, a| {
-            let s: String = c.mem.read_bytes(a[1], a[2] as usize).iter().map(|&b| b as char).collect();
+            let bytes = c.mem.read_bytes(a[1], a[2] as usize);
+            let s = crate::text::decode_bytes(a[0], &bytes);
             let (w, h) = crate::text::extent(a[0], &s);
             c.mem.w32(a[3], w as u32);
             c.mem.w32(a[3] + 4, h as u32);
@@ -94,16 +95,23 @@ pub fn all() -> Vec<Shim> {
         sh!("gdi32.dll", "CreateFontA", 14, |c, a| {
             // (height, width, escapement, orientation, weight, italic, underline, strikeout, charset, outprec, clipprec, quality, pitch, face)
             let face = crate::kernel32::cstr(c, a[13]);
-            crate::gdi::new_handle(crate::gdi::Object::Font { height: a[0] as i32, weight: a[4] as i32, italic: a[5] & 0xff != 0, face })
+            crate::gdi::new_handle(crate::gdi::Object::Font {
+                height: a[0] as i32,
+                weight: a[4] as i32,
+                italic: a[5] & 0xff != 0,
+                charset: a[8] as u8,
+                face,
+            })
         }),
         sh!("gdi32.dll", "TextOutA", 5, |c, a| {
-            let s: String = c.mem.read_bytes(a[3], a[4] as usize).iter().map(|&b| b as char).collect();
+            let bytes = c.mem.read_bytes(a[3], a[4] as usize);
+            let s = crate::text::decode_bytes(a[0], &bytes);
             crate::text::text_out(c, a[0], a[1] as i32, a[2] as i32, &s);
             1
         }),
         sh!("user32.dll", "DrawTextA", 5, |c, a| {
             let bytes = if a[2] as i32 == -1 { c.mem.cstr(a[1]) } else { c.mem.read_bytes(a[1], a[2] as usize) };
-            let s: String = bytes.iter().map(|&b| b as char).collect();
+            let s = crate::text::decode_bytes(a[0], &bytes);
             let mut r = [c.mem.r32(a[3]) as i32, c.mem.r32(a[3] + 4) as i32, c.mem.r32(a[3] + 8) as i32, c.mem.r32(a[3] + 12) as i32];
             let h = crate::text::draw_text(c, a[0], &s, &mut r, a[4]);
             for (i, v) in r.iter().enumerate() {

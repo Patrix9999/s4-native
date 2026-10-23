@@ -23,6 +23,106 @@ const CANDIDATES: &[&str] = &[
     "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf",
 ];
 
+const CP1250: [char; 128] = [
+    '\u{20AC}', '\0',       '\u{201A}', '\0',       '\u{201E}', '\u{2026}', '\u{2020}', '\u{2021}',
+    '\0',       '\u{2030}', 'Š',        '\u{2039}', 'Ś',        'Ť',        'Ž',        'Ź',
+    '\0',       '\u{2018}', '\u{2019}', '\u{201C}', '\u{201D}', '\u{2022}', '\u{2013}', '\u{2014}',
+    '\0',       '\u{2122}', 'š',        '\u{203A}', 'ś',        'ť',        'ž',        'ź',
+    '\u{00A0}', 'ˇ',        '˘',        'Ł',        '¤',        'Ą',        '¦',        '§',
+    '¨',        '©',        'Ş',        '«',        '¬',        '\u{00AD}', '®',        'Ż',
+    '°',        '±',        '˛',        'ł',        '´',        'µ',        '¶',        '·',
+    '¸',        'ą',        'ş',        '»',        'Ľ',        '˝',        'ľ',        'ż',
+    'Ŕ',        'Á',        'Â',        'Ă',        'Ä',        'Ĺ',        'Ć',        'Ç',
+    'Č',        'É',        'Ę',        'Ë',        'Ě',        'Í',        'Î',        'Ď',
+    'Đ',        'Ń',        'Ň',        'Ó',        'Ô',        'Ő',        'Ö',        '×',
+    'Ř',        'Ů',        'Ú',        'Ű',        'Ü',        'Ý',        'Ţ',        'ß',
+    'ŕ',        'á',        'â',        'ă',        'ä',        'ĺ',        'ć',        'ç',
+    'č',        'é',        'ę',        'ë',        'ě',        'í',        'î',        'ď',
+    'đ',        'ń',        'ň',        'ó',        'ô',        'ő',        'ö',        '÷',
+    'ř',        'ů',        'ú',        'ű',        'ü',        'ý',        'ţ',        '˙',
+];
+
+const CP1252: [char; 128] = [
+    '\u{20AC}', '\0',       '\u{201A}', 'ƒ',        '\u{201E}', '\u{2026}', '\u{2020}', '\u{2021}',
+    'ˆ',        '\u{2030}', 'Š',        '\u{2039}', 'Œ',        '\0',       'Ž',        '\0',
+    '\0',       '\u{2018}', '\u{2019}', '\u{201C}', '\u{201D}', '\u{2022}', '\u{2013}', '\u{2014}',
+    '˜',        '\u{2122}', 'š',        '\u{203A}', 'œ',        '\0',       'ž',        'Ÿ',
+    '\u{00A0}', '¡',        '¢',        '£',        '¤',        '¥',        '¦',        '§',
+    '¨',        '©',        'ª',        '«',        '¬',        '\u{00AD}', '®',        '¯',
+    '°',        '±',        '²',        '³',        '´',        'µ',        '¶',        '·',
+    '¸',        '¹',        'º',        '»',        '¼',        '½',        '¾',        '¿',
+    'À',        'Á',        'Â',        'Ã',        'Ä',        'Å',        'Æ',        'Ç',
+    'È',        'É',        'Ê',        'Ë',        'Ì',        'Í',        'Î',        'Ï',
+    'Ð',        'Ñ',        'Ò',        'Ó',        'Ô',        'Õ',        'Ö',        '×',
+    'Ø',        'Ù',        'Ú',        'Û',        'Ü',        'Ý',        'Þ',        'ß',
+    'à',        'á',        'â',        'ã',        'ä',        'å',        'æ',        'ç',
+    'è',        'é',        'ê',        'ë',        'ì',        'í',        'î',        'ï',
+    'ð',        'ñ',        'ò',        'ó',        'ô',        'õ',        'ö',        '÷',
+    'ø',        'ù',        'ú',        'û',        'ü',        'ý',        'þ',        'ÿ',
+];
+
+pub fn active_codepage() -> u32 {
+    static CP: OnceLock<u32> = OnceLock::new();
+    *CP.get_or_init(|| {
+        if let Ok(v) = std::env::var("S4_CODEPAGE") {
+            if let Ok(cp) = v.trim().parse::<u32>() {
+                return cp;
+            }
+            if v.eq_ignore_ascii_case("cp1250") || v.eq_ignore_ascii_case("windows-1250") || v.eq_ignore_ascii_case("1250") {
+                return 1250;
+            }
+            if v.eq_ignore_ascii_case("cp1252") || v.eq_ignore_ascii_case("windows-1252") || v.eq_ignore_ascii_case("1252") {
+                return 1252;
+            }
+        }
+        #[cfg(windows)]
+        {
+            unsafe extern "system" {
+                fn GetACP() -> u32;
+            }
+            let acp = unsafe { GetACP() };
+            if acp != 0 {
+                return acp;
+            }
+        }
+        if let Ok(lang) = std::env::var("LANG").or_else(|_| std::env::var("LC_ALL")) {
+            let l = lang.to_lowercase();
+            if l.starts_with("pl") || l.contains("cs") || l.contains("sk") || l.contains("hu") {
+                return 1250;
+            }
+        }
+        1252
+    })
+}
+
+pub fn decode_ansi(bytes: &[u8], codepage: u32) -> String {
+    if bytes.iter().all(|&b| b < 0x80) {
+        return bytes.iter().map(|&b| b as char).collect();
+    }
+    if let Ok(s) = std::str::from_utf8(bytes) {
+        if s.chars().any(|c| c as u32 >= 0x80) {
+            return s.to_string();
+        }
+    }
+    match codepage {
+        1250 => bytes.iter().map(|&b| {
+            if b < 0x80 { b as char } else { CP1250[(b - 0x80) as usize] }
+        }).collect(),
+        _ => bytes.iter().map(|&b| {
+            if b < 0x80 { b as char } else { CP1252[(b - 0x80) as usize] }
+        }).collect(),
+    }
+}
+
+pub fn decode_bytes(dc: u32, bytes: &[u8]) -> String {
+    let (_, _, charset) = dc_font(dc);
+    let cp = match charset {
+        238 => 1250, // EASTEUROPE_CHARSET
+        _ => active_codepage(),
+    };
+    decode_ansi(bytes, cp)
+}
+
 fn font() -> Option<&'static FontVec> {
     FONT.get_or_init(|| {
         let paths = std::env::var("S4_FONT").into_iter().chain(CANDIDATES.iter().map(|s| s.to_string()));
@@ -41,11 +141,11 @@ fn scale_of(font: &FontVec, height: i32) -> PxScale {
     }
 }
 
-fn dc_font(dc: u32) -> (i32, i32) {
+fn dc_font(dc: u32) -> (i32, i32, u8) {
     let h = gdi::dc_state(dc).font;
     gdi::GDI.with(|g| match g.borrow().objects.get(&h) {
-        Some(Object::Font { height, weight, .. }) => (*height, *weight),
-        _ => (-12, 400),
+        Some(Object::Font { height, weight, charset, .. }) => (*height, *weight, *charset),
+        _ => (-12, 400, 0),
     })
 }
 
@@ -57,7 +157,7 @@ fn advance(font: &FontVec, scale: PxScale, s: &str) -> f32 {
 /// (width, height) of `s` in the DC's font.
 pub fn extent(dc: u32, s: &str) -> (i32, i32) {
     let Some(font) = font() else { return (8 * s.len() as i32, 16) };
-    let (h, _) = dc_font(dc);
+    let (h, _, _) = dc_font(dc);
     let scale = scale_of(font, h);
     let sc = font.as_scaled(scale);
     (advance(font, scale, s).ceil() as i32, sc.height().ceil() as i32)
@@ -67,7 +167,7 @@ pub fn extent(dc: u32, s: &str) -> (i32, i32) {
 fn draw_run(c: &Cpu, dc: u32, x: f32, y: i32, s: &str, clip: Option<[i32; 4]>) {
     let (Some(font), Some(bmp)) = (font(), gdi::dc_bitmap(dc)) else { return };
     let st = gdi::dc_state(dc);
-    let (h, _) = dc_font(dc);
+    let (h, _, _) = dc_font(dc);
     let scale = scale_of(font, h);
     let sc = font.as_scaled(scale);
     let baseline = y as f32 + sc.ascent();

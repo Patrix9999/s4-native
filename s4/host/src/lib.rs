@@ -155,9 +155,20 @@ fn reserve() -> usize {
     p as usize
 }
 
-#[cfg(not(unix))]
+#[cfg(windows)]
 fn reserve() -> usize {
-    panic!("the native host needs a Unix-like system; under Wine the original's own address space is used")
+    unsafe extern "system" {
+        fn VirtualAlloc(lpAddress: *mut u8, dwSize: usize, flAllocationType: u32, flProtect: u32) -> *mut u8;
+    }
+    // MEM_COMMIT (0x1000) | MEM_RESERVE (0x2000), PAGE_READWRITE (0x04)
+    let p = unsafe { VirtualAlloc(core::ptr::null_mut(), 1 << 32, 0x1000 | 0x2000, 0x04) };
+    assert!(!p.is_null(), "cannot reserve the 4 GiB guest address space");
+    p as usize
+}
+
+#[cfg(not(any(unix, windows)))]
+fn reserve() -> usize {
+    panic!("the native host needs a Unix-like system or Windows")
 }
 
 const STACK_TOP: u32 = 0x7ff0_0000;

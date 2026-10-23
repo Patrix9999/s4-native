@@ -1,0 +1,18 @@
+# Original game data and installers — never commit
+*.exe
+*.bin
+*.EXE
+*.dll
+*.DLL
+/extracted/
+/ghidra/
+/logs/
+/build/
+/target/
+/export/
+__pycache__/
+# Lifted code is generated from the game binaries (tools/lift.sh) and stays local.
+s4/lifted/*/src/
+!s4/lifted/all/src/
+s4/x86test/src/cases.rs*
+*.log

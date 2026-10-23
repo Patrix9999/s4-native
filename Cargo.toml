@@ -1,0 +1,67 @@
+[workspace]
+resolver = "3"
+members = ["s4/dllexport", "s4/difftest", "s4/x87", "s4/x86", "s4/host", "s4/gpu", "s4/x86test", "s4/lifted/s4main", "s4/lifted/gfxengine", "s4/lifted/guiengine2", "s4/lifted/soundengine", "s4/lifted/eventengine", "s4/lifted/mapaccess", "s4/lifted/savegameaccess", "s4/lifted/videoengine", "s4/lifted/s4bbgcclient", "s4/lifted/bbsupport", "s4/lifted/economyai", "s4/lifted/mapgenerator", "s4/lifted/rtcomp", "s4/lifted/utility", "s4/lifted/msvcrt", "s4/lifted/msvcp60", "s4/lifted/msvcirt", "s4/lifted/binkw32", "s4/lifted/all", "s4/play", "tools/gfxdump", "tools/lift", "tools/wsprobe"]
+# The generated game crates and the front end build for the host; the older hook-phase DLLs target i686 Windows.
+default-members = ["s4/dllexport", "s4/difftest", "s4/x87", "s4/x86", "tools/gfxdump", "tools/wsprobe"]
+
+[profile.release]
+opt-level = 2
+
+# Generated code compiles much faster (and is still fast enough) at opt-level 1.
+[profile.release.package.lifted-gfxengine]
+opt-level = 1
+
+[profile.release.package.lifted-s4main]
+opt-level = 1
+codegen-units = 16
+
+[profile.release.package.s4-x86test]
+opt-level = 1
+
+[profile.release.package.lifted-guiengine2]
+opt-level = 1
+
+[profile.release.package.lifted-soundengine]
+opt-level = 1
+
+[profile.release.package.lifted-eventengine]
+opt-level = 1
+
+[profile.release.package.lifted-mapaccess]
+opt-level = 1
+
+[profile.release.package.lifted-savegameaccess]
+opt-level = 1
+
+[profile.release.package.lifted-videoengine]
+opt-level = 1
+
+[profile.release.package.lifted-s4bbgcclient]
+opt-level = 1
+
+[profile.release.package.lifted-bbsupport]
+opt-level = 1
+
+[profile.release.package.lifted-economyai]
+opt-level = 1
+
+[profile.release.package.lifted-mapgenerator]
+opt-level = 1
+
+[profile.release.package.lifted-rtcomp]
+opt-level = 1
+
+[profile.release.package.lifted-binkw32]
+opt-level = 1
+
+[profile.release.package.lifted-utility]
+opt-level = 1
+
+[profile.release.package.lifted-msvcrt]
+opt-level = 1
+
+[profile.release.package.lifted-msvcp60]
+opt-level = 1
+
+[profile.release.package.lifted-msvcirt]
+opt-level = 1

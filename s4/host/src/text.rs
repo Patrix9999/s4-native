@@ -10,7 +10,11 @@ use std::sync::OnceLock;
 
 static FONT: OnceLock<Option<FontVec>> = OnceLock::new();
 
-const CANDIDATES: [&str; 6] = [
+const CANDIDATES: &[&str] = &[
+    #[cfg(windows)]
+    "C:\\Windows\\Fonts\\arialbd.ttf",
+    #[cfg(windows)]
+    "C:\\Windows\\Fonts\\arial.ttf",
     "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
     "/usr/share/fonts/liberation-sans/LiberationSans-Bold.ttf",
     "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf",

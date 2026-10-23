@@ -169,7 +169,7 @@ impl World {
         let _ = PROCESS.set(Process { mem, dispatchers: dispatchers.to_vec() });
         let mut cpu = new_cpu(STACK_TOP);
         cpu.fs_w32(0x18, 0); // TEB self pointer is set by the thread table
-        let mut w = World { cpu, modules: Vec::new(), missing: HashMap::new() };
+        let w = World { cpu, modules: Vec::new(), missing: HashMap::new() };
         heap::init();
         w
     }

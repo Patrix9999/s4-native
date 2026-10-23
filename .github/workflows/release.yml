@@ -61,7 +61,9 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          cp target/${{ matrix.target }}/release/s4-play dist/s4-play
+          BIN="target/${{ matrix.target }}/release/s4play"
+          [[ -f "$BIN" ]] || BIN="target/${{ matrix.target }}/release/s4-play"
+          cp "$BIN" dist/s4-play
           chmod +x dist/s4-play
           tar -C dist -czf s4-play-linux-x86_64.tar.gz s4-play
 
@@ -70,8 +72,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cp target/${{ matrix.target }}/release/s4-play.exe \
-            s4-play-windows-x86_64.exe
+          BIN="target/${{ matrix.target }}/release/s4play.exe"
+          [[ -f "$BIN" ]] || BIN="target/${{ matrix.target }}/release/s4-play.exe"
+          cp "$BIN" s4-play-windows-x86_64.exe
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4

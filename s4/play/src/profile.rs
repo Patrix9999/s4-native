@@ -2,83 +2,92 @@
 //! guest thread every millisecond; the handler records the interrupted instruction address. The addresses (relative to
 //! the program's load address) are written to the file every few seconds, to be matched against `nm -n` output.
 
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering::Relaxed};
+#[cfg(target_os = "linux")]
+mod linux_profile {
+    use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering::Relaxed};
 
-const CAPACITY: usize = 1 << 20;
-static SAMPLES: [AtomicU64; CAPACITY] = [const { AtomicU64::new(0) }; CAPACITY];
-/// The return address on the stack top (x86-64) or the link register (aarch64) at each sample: for a sample inside a leaf
-/// routine such as memmove it tells the caller.
-static CALLERS: [AtomicU64; CAPACITY] = [const { AtomicU64::new(0) }; CAPACITY];
-static COUNT: AtomicUsize = AtomicUsize::new(0);
-static LAST_CPU_NS: AtomicU64 = AtomicU64::new(0);
+    const CAPACITY: usize = 1 << 20;
+    static SAMPLES: [AtomicU64; CAPACITY] = [const { AtomicU64::new(0) }; CAPACITY];
+    /// The return address on the stack top (x86-64) or the link register (aarch64) at each sample: for a sample inside a leaf
+    /// routine such as memmove it tells the caller.
+    static CALLERS: [AtomicU64; CAPACITY] = [const { AtomicU64::new(0) }; CAPACITY];
+    static COUNT: AtomicUsize = AtomicUsize::new(0);
+    static LAST_CPU_NS: AtomicU64 = AtomicU64::new(0);
 
-/// Samples taken while the thread was not running (it used no CPU time since the previous sample) have this bit set.
-const IDLE: u64 = 1 << 63;
+    /// Samples taken while the thread was not running (it used no CPU time since the previous sample) have this bit set.
+    const IDLE: u64 = 1 << 63;
 
-extern "C" fn on_signal(_: libc::c_int, _: *mut libc::siginfo_t, uc: *mut libc::c_void) {
-    let uc = uc as *mut libc::ucontext_t;
-    #[cfg(target_arch = "x86_64")]
-    let pc = unsafe { (*uc).uc_mcontext.gregs[libc::REG_RIP as usize] as u64 };
-    #[cfg(target_arch = "aarch64")]
-    let pc = unsafe { (*uc).uc_mcontext.pc };
-    #[cfg(target_arch = "x86_64")]
-    let caller = unsafe { *((*uc).uc_mcontext.gregs[libc::REG_RSP as usize] as *const u64) };
-    #[cfg(target_arch = "aarch64")]
-    let caller = unsafe { (*uc).uc_mcontext.regs[30] };
-    let mut ts = libc::timespec { tv_sec: 0, tv_nsec: 0 };
-    unsafe { libc::clock_gettime(libc::CLOCK_THREAD_CPUTIME_ID, &mut ts) };
-    let now = ts.tv_sec as u64 * 1_000_000_000 + ts.tv_nsec as u64;
-    let idle = now.saturating_sub(LAST_CPU_NS.swap(now, Relaxed)) < 200_000;
-    let i = COUNT.fetch_add(1, Relaxed);
-    if i < CAPACITY {
-        CALLERS[i].store(caller, Relaxed);
-        SAMPLES[i].store(if idle { pc | IDLE } else { pc }, Relaxed);
-    }
-}
-
-/// Starts sampling the calling thread when `S4_PROFILE` is set.
-pub fn start_for_this_thread() {
-    let Ok(path) = std::env::var("S4_PROFILE") else { return };
-    let tid = unsafe { libc::syscall(libc::SYS_gettid) } as libc::pid_t;
-    unsafe {
-        let mut sa: libc::sigaction = std::mem::zeroed();
-        sa.sa_sigaction = on_signal as usize;
-        sa.sa_flags = libc::SA_SIGINFO | libc::SA_RESTART;
-        libc::sigaction(libc::SIGUSR2, &sa, std::ptr::null_mut());
-    }
-    // Load address of the program: the lowest mapping of the executable.
-    let exe = std::fs::read_link("/proc/self/exe").unwrap_or_default();
-    let base = std::fs::read_to_string("/proc/self/maps")
-        .unwrap_or_default()
-        .lines()
-        .filter(|l| l.ends_with(exe.to_string_lossy().as_ref()))
-        .filter_map(|l| u64::from_str_radix(l.split('-').next()?, 16).ok())
-        .min()
-        .unwrap_or(0);
-    let pid = std::process::id() as libc::pid_t;
-    std::thread::spawn(move || {
-        let mut since_write = 0;
-        loop {
-            std::thread::sleep(std::time::Duration::from_millis(1));
-            unsafe { libc::syscall(libc::SYS_tgkill, pid, tid, libc::SIGUSR2) };
-            since_write += 1;
-            if since_write >= 4000 {
-                since_write = 0;
-                let n = COUNT.load(Relaxed).min(CAPACITY);
-                let mut out = String::with_capacity(n * 8);
-                for s in &SAMPLES[..n] {
-                    // Absolute addresses; the first line is the program's load address, `<file>.maps` the mappings.
-                    out.push_str(&format!("{:x}\n", s.load(Relaxed)));
-                }
-                out.insert_str(0, &format!("{base:x}\n"));
-                let _ = std::fs::copy("/proc/self/maps", format!("{path}.maps"));
-                let _ = std::fs::write(&path, out);
-                let callers: String = CALLERS[..n].iter().map(|s| format!("{:x}\n", s.load(Relaxed))).collect();
-                let _ = std::fs::write(format!("{path}.callers"), callers);
-            }
+    extern "C" fn on_signal(_: libc::c_int, _: *mut libc::siginfo_t, uc: *mut libc::c_void) {
+        let uc = uc as *mut libc::ucontext_t;
+        #[cfg(target_arch = "x86_64")]
+        let pc = unsafe { (*uc).uc_mcontext.gregs[libc::REG_RIP as usize] as u64 };
+        #[cfg(target_arch = "aarch64")]
+        let pc = unsafe { (*uc).uc_mcontext.pc };
+        #[cfg(target_arch = "x86_64")]
+        let caller = unsafe { *((*uc).uc_mcontext.gregs[libc::REG_RSP as usize] as *const u64) };
+        #[cfg(target_arch = "aarch64")]
+        let caller = unsafe { (*uc).uc_mcontext.regs[30] };
+        let mut ts = libc::timespec { tv_sec: 0, tv_nsec: 0 };
+        unsafe { libc::clock_gettime(libc::CLOCK_THREAD_CPUTIME_ID, &mut ts) };
+        let now = ts.tv_sec as u64 * 1_000_000_000 + ts.tv_nsec as u64;
+        let idle = now.saturating_sub(LAST_CPU_NS.swap(now, Relaxed)) < 200_000;
+        let i = COUNT.fetch_add(1, Relaxed);
+        if i < CAPACITY {
+            CALLERS[i].store(caller, Relaxed);
+            SAMPLES[i].store(if idle { pc | IDLE } else { pc }, Relaxed);
         }
-    });
+    }
+
+    /// Starts sampling the calling thread when `S4_PROFILE` is set.
+    pub fn start_for_this_thread() {
+        let Ok(path) = std::env::var("S4_PROFILE") else { return };
+        let tid = unsafe { libc::syscall(libc::SYS_gettid) } as libc::pid_t;
+        unsafe {
+            let mut sa: libc::sigaction = std::mem::zeroed();
+            sa.sa_sigaction = on_signal as *const () as usize;
+            sa.sa_flags = libc::SA_SIGINFO | libc::SA_RESTART;
+            libc::sigaction(libc::SIGUSR2, &sa, std::ptr::null_mut());
+        }
+        // Load address of the program: the lowest mapping of the executable.
+        let exe = std::fs::read_link("/proc/self/exe").unwrap_or_default();
+        let base = std::fs::read_to_string("/proc/self/maps")
+            .unwrap_or_default()
+            .lines()
+            .filter(|l| l.ends_with(exe.to_string_lossy().as_ref()))
+            .filter_map(|l| u64::from_str_radix(l.split('-').next()?, 16).ok())
+            .min()
+            .unwrap_or(0);
+        let pid = std::process::id() as libc::pid_t;
+        std::thread::spawn(move || {
+            let mut since_write = 0;
+            loop {
+                std::thread::sleep(std::time::Duration::from_millis(1));
+                unsafe { libc::syscall(libc::SYS_tgkill, pid, tid, libc::SIGUSR2) };
+                since_write += 1;
+                if since_write >= 4000 {
+                    since_write = 0;
+                    let n = COUNT.load(Relaxed).min(CAPACITY);
+                    let mut out = String::with_capacity(n * 8);
+                    for s in &SAMPLES[..n] {
+                        // Absolute addresses; the first line is the program's load address, `<file>.maps` the mappings.
+                        out.push_str(&format!("{:x}\n", s.load(Relaxed)));
+                    }
+                    out.insert_str(0, &format!("{base:x}\n"));
+                    let _ = std::fs::copy("/proc/self/maps", format!("{path}.maps"));
+                    let _ = std::fs::write(&path, out);
+                    let callers: String = CALLERS[..n].iter().map(|s| format!("{:x}\n", s.load(Relaxed))).collect();
+                    let _ = std::fs::write(format!("{path}.callers"), callers);
+                }
+            }
+        });
+    }
 }
+
+#[cfg(target_os = "linux")]
+pub use linux_profile::start_for_this_thread;
+
+#[cfg(not(target_os = "linux"))]
+pub fn start_for_this_thread() {}
 
 /// `S4_TICKSCAN=<first second>`: looks for the game's logic tick counter. Takes snapshots of the program's data (0x400000..0x1000000)
 /// one second apart from the given wall-clock second and prints every 32-bit value that grew steadily, 2 to 200 per second.

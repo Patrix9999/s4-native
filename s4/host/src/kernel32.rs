@@ -96,10 +96,32 @@ fn filetime_now() -> u64 {
 
 /// Local time's offset from UTC in seconds (east positive) at the FILETIME `t`.
 fn utc_offset(t: u64) -> i64 {
-    let secs = (t.saturating_sub(EPOCH_DIFF) / 10_000_000) as libc::time_t;
-    let mut tm: libc::tm = unsafe { std::mem::zeroed() };
-    unsafe { libc::localtime_r(&secs, &mut tm) };
-    tm.tm_gmtoff as i64
+    #[cfg(unix)]
+    {
+        let secs = (t.saturating_sub(EPOCH_DIFF) / 10_000_000) as libc::time_t;
+        let mut tm: libc::tm = unsafe { std::mem::zeroed() };
+        unsafe { libc::localtime_r(&secs, &mut tm) };
+        tm.tm_gmtoff as i64
+    }
+    #[cfg(windows)]
+    {
+        let mut local = 0u64;
+        unsafe {
+            unsafe extern "system" {
+                fn FileTimeToLocalFileTime(lpFileTime: *const u64, lpLocalFileTime: *mut u64) -> i32;
+            }
+            if FileTimeToLocalFileTime(&t, &mut local) != 0 {
+                (local as i64 - t as i64) / 10_000_000
+            } else {
+                0
+            }
+        }
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        let _ = t;
+        0
+    }
 }
 
 fn to_local(t: u64) -> u64 {
